@@ -1,4 +1,4 @@
-use crate::{config, fs};
+use crate::engine::{config, fs};
 
 static SCREENS_MISSING: [usize; 11] = [5, 13, 16, 27, 38, 49, 61, 71, 82, 93, 104];
 

@@ -1,12 +1,11 @@
-use std::{collections::HashMap, hash::Hash, io};
+use std::{collections::HashMap, io};
 
 use crossterm::event::KeyCode;
 use ratatui::{Terminal, prelude::CrosstermBackend};
 
 use crate::{
-    config, fs,
-    game::{self, GameEvent},
-    gfx,
+    engine::{config, fs},
+    screens::play::GameEvent,
 };
 
 pub struct GameGraph {

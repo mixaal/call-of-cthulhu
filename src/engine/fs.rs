@@ -5,7 +5,7 @@ use std::{
     io::{BufReader, Read},
 };
 
-use crate::{config, game};
+use crate::{engine::config, screens::play};
 
 pub(crate) fn read_bitmap(file_path: &str) -> std::io::Result<(u16, u16, Vec<Vec<(u8, u8, u8)>>)> {
     let mut file = File::open(file_path)?;
@@ -251,7 +251,7 @@ pub(crate) fn read_text(screen_no: usize, config: &config::Config) -> std::io::R
 pub(crate) fn read_actions(
     screen_no: usize,
     config: &config::Config,
-) -> std::io::Result<game::GameActions> {
+) -> std::io::Result<play::GameActions> {
     let file_path = format!("{}/actions/{}.json", config.data_path, screen_no);
     let mut file = File::open(file_path)?;
     let mut contents = String::new();

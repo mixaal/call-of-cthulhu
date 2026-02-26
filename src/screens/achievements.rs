@@ -9,7 +9,10 @@ use ratatui::{
     widgets::{Block, Borders, List},
 };
 
-use crate::{config, fs, game::GameEvent};
+use crate::{
+    engine::{config, fs},
+    screens::play::GameEvent,
+};
 
 pub struct AchievementScreen {
     pub(crate) width: usize,

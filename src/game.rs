@@ -1,215 +1,117 @@
-use std::{collections::HashMap, hash::Hash, time::Instant};
+use std::error::Error;
 
-use serde::Deserialize;
+use crossterm::event::{self, Event};
 
 use crate::{
-    config, fs,
-    gfx::{self, ScreenRenderer},
+    engine::{
+        config,
+        gfx::{self, ScreenRenderer},
+        validate,
+    },
+    screens::{
+        achievements, graph, intro_screen,
+        play::{self, GameEvent, GameState},
+    },
 };
 
-#[derive(Deserialize)]
-pub(crate) struct GameActions {
-    // next screens with action text and next screen index
-    pub(crate) next: HashMap<String, usize>,
-    pub(crate) location: Option<String>,
-    pub(crate) ending: Option<bool>,
-}
+pub fn play() -> Result<(), Box<dyn Error>> {
+    let cfg = config::Config::load()?;
+    // validate data files
+    validate::validate_screens(&cfg)?;
+    // load screen graph
+    let mut game_graph = graph::GameGraph::load(&cfg);
+    // Initialize terminal
+    let mut terminal = gfx::init()?;
 
-impl GameActions {
-    pub(crate) fn ending() -> Vec<(String, usize)> {
-        vec![("KONEC".to_string(), 0)]
-    }
-}
+    let dim = terminal.size()?;
+    //println!("Terminal size: {}x{}", dim.width, dim.height);
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum GameEvent {
-    Exit,
-    NewScreen(usize),
-    Ending,
-}
-#[derive(Debug, Clone, PartialEq)]
-pub enum GameState {
-    Intro,
-    Achievements,
-    Playing,
-    Ending,
-}
+    let current_screen = cfg.get_screen();
+    game_graph.visit(current_screen);
+    let mut screen: Box<dyn ScreenRenderer<GameEvent>> = Box::new(play::PlayScreen::new(
+        current_screen,
+        dim.width,
+        dim.height,
+        &cfg,
+    )?);
 
-struct InnerConfig {
-    pub(crate) scale_quality: bool,
-    pub(crate) notifications: bool,
-}
+    let mut state = GameState::Intro;
 
-pub struct GameScreen {
-    screen_no: usize,
-    term_width: u16,
-    term_height: u16,
-    text_helper: gfx::TextHelper,
-    timer: Instant,
-    total_time_to_write: f32,
-    actions: Vec<(String, usize)>,
-    inner_config: InnerConfig,
-    menu_selection: usize,
-    image_names: Vec<String>,
-    ending_screen: bool,
-    location: Option<String>,
-}
+    let mut intro_screen =
+        intro_screen::IntroScreen::new(dim.width as usize, dim.height as usize, &cfg)?;
+    let mut achievements_screen =
+        achievements::AchievementScreen::new(dim.width as usize, dim.height as usize, &cfg)?;
 
-impl GameScreen {
-    pub fn new(
-        screen_no: usize,
-        term_width: u16,
-        term_height: u16,
-        config: &config::Config,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let text_helper = gfx::TextHelper::with_text(
-            config.text_speed,
-            fs::read_text(screen_no, config)
-                .unwrap_or(format!("Error reading screen {}", screen_no)),
-        );
-        let total_time_to_write = text_helper.time_to_finish();
-        let action_desc = fs::read_actions(screen_no, config)?;
-        let ending_screen = action_desc.ending.unwrap_or(false);
-        let location = action_desc.location.clone();
-        let actions = if ending_screen {
-            GameActions::ending()
-        } else {
-            action_desc
-                .next
-                .into_iter()
-                .collect::<Vec<(String, usize)>>()
-        };
+    loop {
+        if event::poll(std::time::Duration::from_millis(5))? {
+            if let Event::Key(key_event) = event::read()? {
+                // if key_event.code == crossterm::event::KeyCode::Esc {
+                //     break;
+                // }
 
-        let image_names = fs::get_image_names_for_screen(screen_no, config)?;
-        if image_names.is_empty() {
-            return Err(format!("No images found for screen {}", screen_no).into());
-        }
-
-        let send_notifications = config.notifications.unwrap_or(false);
-        if send_notifications {
-            Self::inform_location_change(location.clone());
-            if ending_screen {
-                Self::send_notification("Ending screen  🎉");
-            }
-        }
-        Ok(Self {
-            screen_no,
-            term_width,
-            term_height,
-            text_helper,
-            total_time_to_write,
-            timer: Instant::now(),
-            actions,
-            inner_config: InnerConfig {
-                scale_quality: config.scale_quality,
-                notifications: send_notifications,
-            },
-            menu_selection: 0,
-            image_names,
-            ending_screen,
-            location,
-        })
-    }
-
-    fn inform_location_change(location: Option<String>) {
-        if let Some(location) = location {
-            Self::send_notification(&format!("Location: {}", location));
-        }
-    }
-
-    fn send_notification(text: &str) {
-        notify_rust::Notification::new()
-            .summary("Call of Cthulhu")
-            .body(text)
-            .show()
-            .ok();
-    }
-}
-
-fn actions_text(actions: &Vec<(String, usize)>, idx: usize) -> String {
-    let mut contents = String::new();
-    let l = actions.len();
-    if l == 0 {
-        // no actions, most likely ending screen
-        return contents;
-    }
-    let idx = idx % l;
-    let mut i = 0;
-    for (action_text, next_screen) in actions.iter() {
-        if i == idx {
-            contents.push_str(&format!("---> {}\n", action_text));
-        } else {
-            contents.push_str(&format!("     {}\n", action_text));
-        }
-        i += 1;
-    }
-    contents
-}
-
-impl ScreenRenderer<GameEvent> for GameScreen {
-    fn render(&mut self) -> Vec<Vec<(u8, u8, u8)>> {
-        // if multiple images are present for the given screen...
-        let l = self.image_names.len();
-        // ... compute the time that should be spent on each image ...
-        let per_image_time = self.total_time_to_write / l as f32;
-        // ... and cycle the images on screen
-        let idx = (self.timer.elapsed().as_secs_f64() / per_image_time as f64) as usize % l;
-        let tw = self.term_width - self.text_window_sz();
-        if let Ok((_, _, screen)) = fs::read_image(
-            &self.image_names[idx],
-            tw,
-            self.term_height,
-            self.inner_config.scale_quality,
-            true,
-        ) {
-            return screen;
-        } else {
-            // blue screen of death
-            return vec![vec![(0, 0, 255); tw as usize]; self.term_height as usize];
-        }
-    }
-
-    fn text(&mut self) -> String {
-        let text = self.text_helper.get_text().unwrap_or_default();
-        if let Some(when) = self.text_helper.text_reached_end() {
-            let actions_text = actions_text(&self.actions, self.menu_selection);
-            format!("{}\n\n{}", text, actions_text)
-        } else {
-            text
-        }
-    }
-
-    fn text_window_sz(&self) -> u16 {
-        self.term_width / 4
-    }
-
-    fn key_event(&mut self, key_code: crossterm::event::KeyCode) -> Option<GameEvent> {
-        match key_code {
-            crossterm::event::KeyCode::Esc => Some(GameEvent::Exit),
-            crossterm::event::KeyCode::Down => {
-                if self.menu_selection + 1 < self.actions.len() {
-                    self.menu_selection += 1;
-                }
-                None
-            }
-            crossterm::event::KeyCode::Up => {
-                if self.menu_selection > 0 {
-                    self.menu_selection -= 1;
-                }
-                None
-            }
-            crossterm::event::KeyCode::Enter => {
-                if let Some((_, next_screen)) = self.actions.get(self.menu_selection) {
-                    if self.ending_screen {
-                        return Some(GameEvent::Ending);
-                    } else {
-                        return Some(GameEvent::NewScreen(*next_screen));
+                match state {
+                    GameState::Playing => {
+                        if let Some(event) = screen.key_event(key_event.code) {
+                            match event {
+                                GameEvent::NewScreen(screen_no) => {
+                                    game_graph.visit(screen_no);
+                                    screen = Box::new(play::PlayScreen::new(
+                                        screen_no, dim.width, dim.height, &cfg,
+                                    )?);
+                                }
+                                GameEvent::Exit => state = GameState::Intro,
+                                GameEvent::Ending => state = GameState::Ending,
+                            }
+                        }
                     }
-                } else {
-                    None
+                    GameState::Ending => {
+                        // do nothing, just show the graph
+                        let game_event = game_graph.key_event(key_event.code);
+                        if game_event == Some(GameEvent::Exit) {
+                            state = GameState::Intro;
+                        }
+                    }
+                    GameState::Achievements => {
+                        let achievement_event = achievements_screen.key_event(key_event.code);
+                        if achievement_event == Some(GameEvent::Exit) {
+                            state = GameState::Intro;
+                        }
+                    }
+                    GameState::Intro => {
+                        // do nothing, just show the intro screen
+                        intro_screen.key_event(key_event.code);
+                        let intro_event = intro_screen.get_selected_item();
+                        if intro_event == Some(intro_screen::NEW_GAME) {
+                            state = GameState::Playing;
+                            screen = Box::new(play::PlayScreen::new(
+                                current_screen,
+                                dim.width,
+                                dim.height,
+                                &cfg,
+                            )?);
+                        } else if intro_event == Some(intro_screen::ACHIEVEMENTS) {
+                            state = GameState::Achievements;
+                        } else if intro_event == Some(intro_screen::EXIT) {
+                            break;
+                        }
+                    }
                 }
             }
-            _ => None,
         }
+
+        if state == GameState::Intro {
+            intro_screen.render(&mut terminal)?;
+        } else if state == GameState::Achievements {
+            achievements_screen.render(&mut terminal)?;
+        } else if state == GameState::Ending {
+            game_graph.render(&mut terminal)?;
+        } else {
+            gfx::render(&mut terminal, &mut screen)?;
+        }
+        //println!("State: {:?}", state);
     }
+
+    // Restore terminal
+    gfx::shutdown(terminal)?;
+    Ok(())
 }

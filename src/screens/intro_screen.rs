@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListState, Paragraph},
 };
 
-use crate::{config, fs};
+use crate::engine::{config, fs};
 
 pub struct IntroScreen {
     pub(crate) width: usize,

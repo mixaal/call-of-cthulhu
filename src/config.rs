@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, str::FromStr};
 
 use serde::Deserialize;
 
@@ -34,4 +34,18 @@ impl Config {
             Err("Failed to parse config file".into())
         }
     }
+
+    pub fn get_screen(&self) -> usize {
+        if !self.debug {
+            return 0;
+        }
+        get_env("SCREEN_NO", 0 as usize)
+    }
+}
+
+pub(crate) fn get_env<T: FromStr>(name: &str, default: T) -> T {
+    std::env::var(name)
+        .unwrap_or_default()
+        .parse()
+        .unwrap_or(default)
 }

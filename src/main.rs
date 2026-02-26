@@ -10,14 +10,15 @@ use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cfg = config::Config::load()?;
-    validate::validate_screens(&cfg);
+    // validate data files
+    validate::validate_screens(&cfg)?;
     // Initialize terminal
     let mut terminal = gfx::init()?;
 
     let dim = terminal.size()?;
     //println!("Terminal size: {}x{}", dim.width, dim.height);
 
-    let current_screen = 0;
+    let current_screen = cfg.get_screen();
 
     let mut screen: Box<dyn ScreenRenderer<GameState>> = Box::new(game::GameScreen::new(
         current_screen,
@@ -36,6 +37,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                             )?);
                         }
                         GameState::Exit => break,
+                        GameState::Ending => {
+                            screen =
+                                Box::new(game::GameScreen::new(0, dim.width, dim.height, &cfg)?);
+                        }
                     }
                 }
             }

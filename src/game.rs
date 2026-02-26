@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, hash::Hash, time::Instant};
 
 use serde::Deserialize;
 
@@ -11,11 +11,20 @@ use crate::{
 pub(crate) struct GameActions {
     // next screens with action text and next screen index
     pub(crate) next: HashMap<String, usize>,
+    pub(crate) location: Option<String>,
+    pub(crate) ending: Option<bool>,
+}
+
+impl GameActions {
+    pub(crate) fn ending() -> Vec<(String, usize)> {
+        vec![("KONEC".to_string(), 0)]
+    }
 }
 
 pub enum GameState {
     Exit,
     NewScreen(usize),
+    Ending,
 }
 
 struct InnerConfig {
@@ -33,6 +42,8 @@ pub struct GameScreen {
     inner_config: InnerConfig,
     menu_selection: usize,
     image_names: Vec<String>,
+    ending_screen: bool,
+    location: Option<String>,
 }
 
 impl GameScreen {
@@ -48,10 +59,17 @@ impl GameScreen {
                 .unwrap_or(format!("Error reading screen {}", screen_no)),
         );
         let total_time_to_write = text_helper.time_to_finish();
-        let actions = fs::read_actions(screen_no, config)?
-            .next
-            .into_iter()
-            .collect::<Vec<(String, usize)>>();
+        let action_desc = fs::read_actions(screen_no, config)?;
+        let ending_screen = action_desc.ending.unwrap_or(false);
+        let location = action_desc.location.clone();
+        let actions = if ending_screen {
+            GameActions::ending()
+        } else {
+            action_desc
+                .next
+                .into_iter()
+                .collect::<Vec<(String, usize)>>()
+        };
 
         let image_names = fs::get_image_names_for_screen(screen_no, config)?;
         if image_names.is_empty() {
@@ -71,6 +89,8 @@ impl GameScreen {
             },
             menu_selection: 0,
             image_names,
+            ending_screen,
+            location,
         })
     }
 }
@@ -78,6 +98,10 @@ impl GameScreen {
 fn actions_text(actions: &Vec<(String, usize)>, idx: usize) -> String {
     let mut contents = String::new();
     let l = actions.len();
+    if l == 0 {
+        // no actions, most likely ending screen
+        return contents;
+    }
     let idx = idx % l;
     let mut i = 0;
     for (action_text, next_screen) in actions.iter() {

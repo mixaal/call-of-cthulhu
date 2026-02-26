@@ -68,6 +68,7 @@ fn quality_scale_image(
     height: u16,
     new_width: u16,
     new_height: u16,
+    keep_aspect_ratio: bool,
 ) -> Vec<Vec<(u8, u8, u8)>> {
     // Convert the input image to an RgbImage
     let mut input_image = RgbImage::new(width as u32, height as u32);
@@ -90,7 +91,7 @@ fn quality_scale_image(
     let aspect_ratio = width as f32 / height as f32;
     let new_aspect_ratio = new_width as f32 / new_height as f32;
 
-    let (scaled_width, scaled_height) = if new_aspect_ratio > aspect_ratio {
+    let (mut scaled_width, mut scaled_height) = if new_aspect_ratio > aspect_ratio {
         // Fit to height
         let scaled_width = (new_height as f32 * aspect_ratio).round() as u32;
         ((2 * scaled_width).min(new_width as u32), new_height as u32)
@@ -99,6 +100,12 @@ fn quality_scale_image(
         let scaled_height = (new_width as f32 / aspect_ratio).round() as u32;
         (new_width as u32, scaled_height)
     };
+
+    if !keep_aspect_ratio {
+        // If we don't care about aspect ratio, just use the new dimensions directly
+        scaled_width = new_width as u32;
+        scaled_height = new_height as u32;
+    }
 
     // Resize the image using a cubic filter
     let resized_image = image::imageops::resize(
@@ -132,11 +139,12 @@ fn scale_image(
     height: u16,
     new_width: u16,
     new_height: u16,
+    keep_aspect_ratio: bool,
 ) -> Vec<Vec<(u8, u8, u8)>> {
     let aspect_ratio = width as f32 / height as f32;
     let new_aspect_ratio = new_width as f32 / new_height as f32;
 
-    let (scaled_width, scaled_height) = if new_aspect_ratio > aspect_ratio {
+    let (mut scaled_width, mut scaled_height) = if new_aspect_ratio > aspect_ratio {
         // Fit to height
         let scaled_width = (new_height as f32 * aspect_ratio).round() as u16;
         ((2 * scaled_width).min(new_width), new_height)
@@ -145,6 +153,12 @@ fn scale_image(
         let scaled_height = (new_width as f32 / aspect_ratio).round() as u16;
         (new_width, scaled_height)
     };
+
+    if !keep_aspect_ratio {
+        // If we don't care about aspect ratio, just use the new dimensions directly
+        scaled_width = new_width;
+        scaled_height = new_height;
+    }
 
     let x_offset = (new_width - scaled_width) / 2;
     let y_offset = (new_height - scaled_height) / 2;
@@ -190,6 +204,7 @@ pub(crate) fn read_image(
     term_width: u16,
     term_height: u16,
     quality_scale: bool,
+    keep_aspect_ratio: bool,
 ) -> std::io::Result<(u16, u16, Vec<Vec<(u8, u8, u8)>>)> {
     let (width, height, pixels) = read_png(file_path).map_err(|e| {
         std::io::Error::new(
@@ -198,9 +213,23 @@ pub(crate) fn read_image(
         )
     })?;
     let scaled = if quality_scale {
-        quality_scale_image(&pixels, width, height, term_width, term_height)
+        quality_scale_image(
+            &pixels,
+            width,
+            height,
+            term_width,
+            term_height,
+            keep_aspect_ratio,
+        )
     } else {
-        scale_image(&pixels, width, height, term_width, term_height)
+        scale_image(
+            &pixels,
+            width,
+            height,
+            term_width,
+            term_height,
+            keep_aspect_ratio,
+        )
     };
     Ok((width, height, scaled))
 }
@@ -229,4 +258,36 @@ pub(crate) fn read_actions(
     file.read_to_string(&mut contents)?;
     let actions = serde_json::from_str(&contents)?;
     Ok(actions)
+}
+
+pub(crate) fn load_intro_screen_image(
+    term_width: u16,
+    term_height: u16,
+    config: &config::Config,
+) -> Result<Vec<Vec<(u8, u8, u8)>>, Box<dyn std::error::Error>> {
+    let intro_image = format!("{}/images/intro.png", config.data_path);
+    let intro_screen = read_image(
+        &intro_image,
+        term_width,
+        term_height,
+        config.scale_quality,
+        false,
+    )?;
+    Ok(intro_screen.2)
+}
+
+pub(crate) fn load_achievements_screen_image(
+    term_width: u16,
+    term_height: u16,
+    config: &config::Config,
+) -> Result<Vec<Vec<(u8, u8, u8)>>, Box<dyn std::error::Error>> {
+    let intro_image = format!("{}/images/achievements.png", config.data_path);
+    let intro_screen = read_image(
+        &intro_image,
+        term_width,
+        term_height,
+        config.scale_quality,
+        false,
+    )?;
+    Ok(intro_screen.2)
 }

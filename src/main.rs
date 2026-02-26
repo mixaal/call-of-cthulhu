@@ -2,7 +2,7 @@ use call_of_cthulhu::{
     config,
     game::{self, GameEvent, GameState},
     gfx::{self, ScreenRenderer},
-    graph, validate,
+    graph, intro_screen, validate,
 };
 use crossterm::event::{self, Event};
 
@@ -29,14 +29,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         &cfg,
     )?);
 
-    let mut state = GameState::Playing;
+    let mut state = GameState::Intro;
+
+    let mut intro_screen =
+        intro_screen::IntroScreen::new(dim.width as usize, dim.height as usize, &cfg)?;
 
     loop {
         if event::poll(std::time::Duration::from_millis(5))? {
             if let Event::Key(key_event) = event::read()? {
-                if key_event.code == crossterm::event::KeyCode::Esc {
-                    break;
-                }
+                // if key_event.code == crossterm::event::KeyCode::Esc {
+                //     break;
+                // }
 
                 match state {
                     GameState::Playing => {
@@ -48,21 +51,41 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         screen_no, dim.width, dim.height, &cfg,
                                     )?);
                                 }
-                                GameEvent::Exit => break,
+                                GameEvent::Exit => state = GameState::Intro,
                                 GameEvent::Ending => state = GameState::Ending,
                             }
                         }
                     }
                     GameState::Ending => {
                         // do nothing, just show the graph
+                        let game_event = game_graph.key_event(key_event.code);
+                        if game_event == Some(GameEvent::Exit) {
+                            state = GameState::Intro;
+                        }
                     }
                     GameState::Intro => {
                         // do nothing, just show the intro screen
+                        intro_screen.key_event(key_event.code);
+                        let intro_event = intro_screen.get_selected_item();
+                        if intro_event == Some(intro_screen::NEW_GAME) {
+                            state = GameState::Playing;
+                            screen = Box::new(game::GameScreen::new(
+                                current_screen,
+                                dim.width,
+                                dim.height,
+                                &cfg,
+                            )?);
+                        } else if intro_event == Some(intro_screen::EXIT) {
+                            break;
+                        }
                     }
                 }
             }
         }
-        if state == GameState::Ending {
+
+        if state == GameState::Intro {
+            intro_screen.render(&mut terminal)?;
+        } else if state == GameState::Ending {
             game_graph.render(&mut terminal)?;
         } else {
             gfx::render(&mut terminal, &mut screen)?;

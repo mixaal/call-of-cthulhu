@@ -1,5 +1,6 @@
 use std::{collections::HashMap, hash::Hash, io};
 
+use crossterm::event::KeyCode;
 use ratatui::{Terminal, prelude::CrosstermBackend};
 
 use crate::{
@@ -104,5 +105,14 @@ impl GameGraph {
             }
         })?;
         Ok(())
+    }
+
+    pub fn key_event(&mut self, key_code: KeyCode) -> Option<GameEvent> {
+        match key_code {
+            KeyCode::Enter => {
+                Some(GameEvent::Exit) // just exit the graph view on Enter
+            }
+            _ => None,
+        }
     }
 }

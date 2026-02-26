@@ -159,6 +159,7 @@ impl ScreenRenderer<GameEvent> for GameScreen {
             tw,
             self.term_height,
             self.inner_config.scale_quality,
+            true,
         ) {
             return screen;
         } else {

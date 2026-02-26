@@ -8,6 +8,7 @@ pub struct Config {
     pub(crate) text_speed: f64,
     pub(crate) debug: bool,
     pub(crate) data_path: String,
+    pub(crate) notifications: Option<bool>,
 }
 
 impl Default for Config {
@@ -17,6 +18,7 @@ impl Default for Config {
             text_speed: 50.0,
             debug: false,
             data_path: String::from("data/"),
+            notifications: None,
         }
     }
 }

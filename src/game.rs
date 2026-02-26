@@ -29,6 +29,7 @@ pub enum GameState {
 
 struct InnerConfig {
     pub(crate) scale_quality: bool,
+    pub(crate) notifications: bool,
 }
 
 pub struct GameScreen {
@@ -76,6 +77,13 @@ impl GameScreen {
             return Err(format!("No images found for screen {}", screen_no).into());
         }
 
+        let send_notifications = config.notifications.unwrap_or(false);
+        if send_notifications {
+            Self::inform_location_change(location.clone());
+            if ending_screen {
+                Self::send_notification("Ending screen  🎉");
+            }
+        }
         Ok(Self {
             screen_no,
             term_width,
@@ -86,12 +94,27 @@ impl GameScreen {
             actions,
             inner_config: InnerConfig {
                 scale_quality: config.scale_quality,
+                notifications: send_notifications,
             },
             menu_selection: 0,
             image_names,
             ending_screen,
             location,
         })
+    }
+
+    fn inform_location_change(location: Option<String>) {
+        if let Some(location) = location {
+            Self::send_notification(&format!("Location: {}", location));
+        }
+    }
+
+    fn send_notification(text: &str) {
+        notify_rust::Notification::new()
+            .summary("Call of Cthulhu")
+            .body(text)
+            .show()
+            .ok();
     }
 }
 

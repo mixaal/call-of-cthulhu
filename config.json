@@ -2,5 +2,6 @@
   "text_speed": 180.0,
   "scale_quality": true,
   "debug": true,
+  "notifications": true,
   "data_path": "assets/"
 }

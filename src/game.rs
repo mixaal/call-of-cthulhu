@@ -21,9 +21,16 @@ impl GameActions {
     }
 }
 
-pub enum GameState {
+#[derive(Debug, Clone, PartialEq)]
+pub enum GameEvent {
     Exit,
     NewScreen(usize),
+    Ending,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub enum GameState {
+    Intro,
+    Playing,
     Ending,
 }
 
@@ -138,7 +145,7 @@ fn actions_text(actions: &Vec<(String, usize)>, idx: usize) -> String {
     contents
 }
 
-impl ScreenRenderer<GameState> for GameScreen {
+impl ScreenRenderer<GameEvent> for GameScreen {
     fn render(&mut self) -> Vec<Vec<(u8, u8, u8)>> {
         // if multiple images are present for the given screen...
         let l = self.image_names.len();
@@ -174,9 +181,9 @@ impl ScreenRenderer<GameState> for GameScreen {
         self.term_width / 4
     }
 
-    fn key_event(&mut self, key_code: crossterm::event::KeyCode) -> Option<GameState> {
+    fn key_event(&mut self, key_code: crossterm::event::KeyCode) -> Option<GameEvent> {
         match key_code {
-            crossterm::event::KeyCode::Esc => Some(GameState::Exit),
+            crossterm::event::KeyCode::Esc => Some(GameEvent::Exit),
             crossterm::event::KeyCode::Down => {
                 if self.menu_selection + 1 < self.actions.len() {
                     self.menu_selection += 1;
@@ -191,7 +198,11 @@ impl ScreenRenderer<GameState> for GameScreen {
             }
             crossterm::event::KeyCode::Enter => {
                 if let Some((_, next_screen)) = self.actions.get(self.menu_selection) {
-                    Some(GameState::NewScreen(*next_screen))
+                    if self.ending_screen {
+                        return Some(GameEvent::Ending);
+                    } else {
+                        return Some(GameEvent::NewScreen(*next_screen));
+                    }
                 } else {
                     None
                 }

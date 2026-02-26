@@ -1,8 +1,6 @@
 use std::time::{Duration, Instant};
 
-use rand::Rng;
-
-use crate::{gfx, math};
+use rand::RngExt;
 
 struct RainDrop {
     x: usize,

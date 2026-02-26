@@ -118,7 +118,7 @@ impl IntroScreen {
             KeyCode::Enter => {
                 self.menu_item_selected = Some(self.internal_item_selected);
             }
-            _ => {}
+            _ => self.menu_item_selected = None, // reset menu selection when navigating
         }
     }
 }

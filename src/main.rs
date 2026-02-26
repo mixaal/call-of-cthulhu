@@ -1,5 +1,5 @@
 use call_of_cthulhu::{
-    config,
+    achievements, config,
     game::{self, GameEvent, GameState},
     gfx::{self, ScreenRenderer},
     graph, intro_screen, validate,
@@ -33,6 +33,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut intro_screen =
         intro_screen::IntroScreen::new(dim.width as usize, dim.height as usize, &cfg)?;
+    let mut achievements_screen =
+        achievements::AchievementScreen::new(dim.width as usize, dim.height as usize, &cfg)?;
 
     loop {
         if event::poll(std::time::Duration::from_millis(5))? {
@@ -63,6 +65,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                             state = GameState::Intro;
                         }
                     }
+                    GameState::Achievements => {
+                        let achievement_event = achievements_screen.key_event(key_event.code);
+                        if achievement_event == Some(GameEvent::Exit) {
+                            state = GameState::Intro;
+                        }
+                    }
                     GameState::Intro => {
                         // do nothing, just show the intro screen
                         intro_screen.key_event(key_event.code);
@@ -75,6 +83,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 dim.height,
                                 &cfg,
                             )?);
+                        } else if intro_event == Some(intro_screen::ACHIEVEMENTS) {
+                            state = GameState::Achievements;
                         } else if intro_event == Some(intro_screen::EXIT) {
                             break;
                         }
@@ -85,6 +95,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         if state == GameState::Intro {
             intro_screen.render(&mut terminal)?;
+        } else if state == GameState::Achievements {
+            achievements_screen.render(&mut terminal)?;
         } else if state == GameState::Ending {
             game_graph.render(&mut terminal)?;
         } else {

@@ -30,6 +30,7 @@ pub enum GameEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameState {
     Intro,
+    Achievements,
     Playing,
     Ending,
 }

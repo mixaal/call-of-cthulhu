@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
+pub mod achievements;
 pub mod config;
 pub mod fs;
 pub mod game;
